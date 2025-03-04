@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI绘画 - 悠着点用</title>
+  <link rel="icon" href="favicon.ico">
+  <style>
+    /* 通用样式 */
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: #f0f0f0;
+      font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+      overflow-x: hidden;
+    }
+    /* 登录界面样式 */
+    #loginContainer {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0,0,0,0.5);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+    }
+    .login-box {
+      background-color: #fff;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+      text-align: center;
+      width: 300px;
+    }
+    .login-box input {
+      width: 80%;
+      padding: 10px;
+      margin: 10px 0;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+    .login-box button {
+      width: 80%;
+      padding: 10px;
+      background-color: #007AFF;
+      border: none;
+      color: #fff;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .error-message {
+      color: red;
+      font-size: 14px;
+    }
+    /* 聊天窗口样式 */
+    .chat-container {
+      width: 100%;
+      max-width: 600px;
+      height: 90vh;
+      background-color: #fff;
+      border-radius: 10px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      margin: 20px auto; /* 修改为上下留边自适应 */
+    }
+    #chatContainer {
+      display: none; /* 登录前隐藏 */
+    }
+    .chat-header {
+      background-color: #007AFF;
+      color: #fff;
+      padding: 15px;
+      text-align: center;
+      font-size: 18px;
+    }
+    .messages {
+      flex: 1;
+      padding: 15px;
+      overflow-y: auto;
+      background-color: #f5f5f5;
+    }
+    .message {
+      margin-bottom: 15px;
+      max-width: 80%;
+      padding: 10px 15px;
+      border-radius: 15px;
+      word-wrap: break-word;
+      position: relative;
+    }
+    .message.user {
+      background-color: #dcf8c6;
+      margin-left: auto;
+      border-bottom-right-radius: 0;
+    }
+    .message.bot {
+      background-color: #fff;
+      margin-right: auto;
+      border-bottom-left-radius: 0;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    /* 进度条样式 */
+    .progress-container {
+      width: 100%;
+      background-color: #eee;
+      border-radius: 8px;
+      overflow: hidden;
+      height: 10px;
+      margin-top: 5px;
+    }
+    .progress-bar {
+      height: 100%;
+      width: 0%;
+      background-color: #007AFF;
+      transition: width 0.3s;
+    }
+    .loading-text {
+      text-align: center;
+      font-size: 0.9rem;
+      color: #666;
+      margin-top: 5px;
+    }
+    .input-container {
+      display: flex;
+      border-top: 1px solid #ddd;
+    }
+    .input-container input {
+      flex: 1;
+      border: none;
+      padding: 15px;
+      font-size: 16px;
+      outline: none;
+    }
+    .input-container button {
+      background-color: #007AFF;
+      border: none;
+      color: #fff;
+      padding: 15px 20px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+    /* 图片消息样式 */
+    .image-wrapper {
+      position: relative;
+    }
+    .image-wrapper img {
+      width: 100%;
+      border-radius: 8px;
+    }
+    .error {
+      color: #FF3B30;
+      text-align: center;
+      margin-top: 10px;
+    }
+    /* 页面进入动画 */
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .fade-in {
+      animation: fadeIn 0.5s ease-out;
+    }
+    /* 欢迎提示样式 */
+    .welcome-message {
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background-color: #007AFF;
+      color: #fff;
+      padding: 10px 20px;
+      border-radius: 4px;
+      z-index: 1001;
+      opacity: 1;
+      transition: opacity 1s;
+    }
+  </style>
+</head>
+<body>
+  <!-- 登录界面 -->
+  <div id="loginContainer">
+    <div class="login-box">
+      <h2>登录</h2>
+      <input type="text" id="account" placeholder="账号">
+      <input type="password" id="password" placeholder="密码">
+      <button onclick="login()">登录</button>
+      <div class="error-message" id="loginError"></div>
+    </div>
+  </div>
+
+  <!-- 主界面 -->
+  <div class="chat-container" id="chatContainer">
+    <div class="chat-header">AI绘画</div>
+    <div class="messages" id="messages"></div>
+    <div class="input-container">
+      <input type="text" id="promptInput" placeholder="请输入绘画描述，例如：海上明月下的灯塔">
+      <button onclick="sendMessage()">发送</button>
+    </div>
+  </div>
+
+  <script>
+    const API_KEY = 'sk-zncemituzzehaumjldyndpadyrzbexwidkusjxdsnvbbjcdh';
+
+    // 默认页面加载时始终显示登录界面
+    document.addEventListener('DOMContentLoaded', function() {
+      document.getElementById('loginContainer').style.display = 'flex';
+      document.getElementById('chatContainer').style.display = 'none';
+    });
+
+    function login() {
+      var account = document.getElementById('account').value;
+      var password = document.getElementById('password').value;
+      if (account === '998877' && password === '123789') {
+        fadeOut(document.getElementById('loginContainer'), function() {
+          document.getElementById('loginContainer').style.display = 'none';
+          document.getElementById('chatContainer').style.display = 'flex';
+          playEntranceAnimation();
+          showWelcomeMessage();
+        });
+      } else {
+        document.getElementById('loginError').textContent = '账号或密码错误';
+      }
+    }
+
+    // 简单的淡出效果
+    function fadeOut(element, callback) {
+      element.style.transition = 'opacity 0.5s';
+      element.style.opacity = 0;
+      setTimeout(callback, 500);
+    }
+
+    function playEntranceAnimation() {
+      var chatContainer = document.getElementById('chatContainer');
+      chatContainer.classList.add('fade-in');
+    }
+
+    function showWelcomeMessage() {
+      var welcomeDiv = document.createElement('div');
+      welcomeDiv.className = 'welcome-message';
+      welcomeDiv.textContent = '欢迎使用AI绘画！';
+      document.body.appendChild(welcomeDiv);
+      setTimeout(function() {
+        welcomeDiv.style.opacity = 0;
+        setTimeout(function() {
+          document.body.removeChild(welcomeDiv);
+        }, 1000);
+      }, 3000);
+    }
+
+    // 聊天及图片生成逻辑
+    function sendMessage() {
+      const input = document.getElementById('promptInput');
+      const prompt = input.value.trim();
+      if (!prompt) return;
+      addMessage('user', prompt);
+      input.value = '';
+      const botMsgId = addMessage('bot', '');
+      generateImage(prompt, botMsgId);
+    }
+
+    // 添加消息，sender取值 "user" 或 "bot"
+    function addMessage(sender, content) {
+      const messagesDiv = document.getElementById('messages');
+      const messageDiv = document.createElement('div');
+      messageDiv.classList.add('message', sender);
+      if (sender === 'bot') {
+        messageDiv.innerHTML = `
+          <div class="progress-container">
+            <div class="progress-bar"></div>
+          </div>
+          <div class="loading-text">生成中...请稍候</div>
+        `;
+        messageDiv.id = 'bot-' + Date.now();
+      } else {
+        messageDiv.textContent = content;
+      }
+      messagesDiv.appendChild(messageDiv);
+      messagesDiv.scrollTop = messagesDiv.scrollHeight;
+      return messageDiv.id;
+    }
+
+    // 调用 API 生成图片，并更新对应的机器人消息
+    async function generateImage(prompt, botMsgId) {
+      const botMsgDiv = document.getElementById(botMsgId);
+      const progressBar = botMsgDiv.querySelector('.progress-bar');
+      let progress = 0;
+      const progressInterval = setInterval(() => {
+        if (progress < 90) {
+          progress += Math.random() * 5;
+          progressBar.style.width = Math.min(progress, 100) + '%';
+        }
+      }, 500);
+
+      try {
+        const options = {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${API_KEY}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            model: "Kwai-Kolors/Kolors",
+            prompt: prompt,
+            negative_prompt: "low quality, blurry, text",
+            image_size: "1024x1024",
+            batch_size: 1,
+            seed: Math.floor(Math.random() * 1000000000),
+            num_inference_steps: 20,
+            guidance_scale: 7.5
+          })
+        };
+
+        const response = await fetch('https://api.siliconflow.cn/v1/images/generations', options);
+        const data = await response.json();
+
+        clearInterval(progressInterval);
+        progressBar.style.width = '100%';
+
+        if (data.error) {
+          botMsgDiv.innerHTML = `<div class="error">API错误：${data.error.message}</div>`;
+        } else if (data.data && data.data.length > 0) {
+          const imageUrl = data.data[0].url;
+          // 直接显示图片，不再显示下载按钮
+          botMsgDiv.innerHTML = `
+            <div class="image-wrapper">
+              <img src="${imageUrl}" alt="生成的图像" id="img-${botMsgId}">
+            </div>
+          `;
+          const imgElem = document.getElementById(`img-${botMsgId}`);
+          imgElem.onload = function() {
+            applyWatermark(imgElem);
+          };
+        } else {
+          botMsgDiv.innerHTML = `<div class="error">未收到生成的图片</div>`;
+        }
+      } catch (err) {
+        clearInterval(progressInterval);
+        botMsgDiv.innerHTML = `<div class="error">请求失败：${err.message}</div>`;
+      }
+    }
+
+    // 自动在图片右下角添加水印，约束水印大小
+    function applyWatermark(imgElem) {
+      const watermarkSrc = '1.png';
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      const mainImage = new Image();
+      const watermarkImage = new Image();
+      mainImage.crossOrigin = 'Anonymous';
+      watermarkImage.crossOrigin = 'Anonymous';
+      mainImage.src = imgElem.src;
+      watermarkImage.src = watermarkSrc;
+
+      Promise.all([
+        new Promise(resolve => { mainImage.onload = resolve; }),
+        new Promise(resolve => { watermarkImage.onload = resolve; })
+      ]).then(() => {
+        canvas.width = mainImage.width;
+        canvas.height = mainImage.height;
+        ctx.drawImage(mainImage, 0, 0);
+        // 计算水印尺寸（宽度占主图20%）及位置（右下角，边距10px）
+        const scale = 0.2;
+        const watermarkWidth = mainImage.width * scale;
+        const watermarkHeight = watermarkImage.height * (watermarkWidth / watermarkImage.width);
+        const margin = 10;
+        const x = mainImage.width - watermarkWidth - margin;
+        const y = mainImage.height - watermarkHeight - margin;
+        ctx.drawImage(watermarkImage, x, y, watermarkWidth, watermarkHeight);
+        // 用水印处理后的图片替换原图
+        imgElem.src = canvas.toDataURL('image/png');
+      }).catch(err => {
+        console.error('添加水印时出错:', err);
+      });
+    }
+  </script>
+</body>
+</html>
